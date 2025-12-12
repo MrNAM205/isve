@@ -1,0 +1,5 @@
+{
+  "name": "ISVE",
+  "description": "A cockpit-grade tactical analysis and document generation engine for sovereign remedy, status correction, and commercial law workflows powered by Gemini.",
+  "requestFramePermissions": []
+}
