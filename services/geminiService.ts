@@ -23,8 +23,11 @@ import {
 } from "../types";
 
 // NOTE: In a real production app, API keys should be handled via backend proxy or secure env vars.
-// For this demo, we assume process.env.API_KEY is injected by the environment.
-const apiKey = process.env.API_KEY || '';
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+
+if (!apiKey) {
+  throw new Error("VITE_GEMINI_API_KEY is not set. Please add it to your .env file.");
+}
 
 const ai = new GoogleGenAI({ apiKey });
 
@@ -168,6 +171,66 @@ Your goal is to provide a step-by-step dialogue that:
 Output strictly JSON with 'title', 'description', 'steps' (array of label, text, guidance), and 'objections' (array of trigger, response).
 `;
 
+const ALLONGE_SYSTEM_INSTRUCTION = `
+You are a Commercial Law AI assistant specializing in the Uniform Commercial Code (UCC). Your task is to generate an Allonge (an attachment to a negotiable instrument) and provide a legal rationale based on the provided framework.
+
+LEGAL LOGIC FRAMEWORK (Fully Extended Layered Citation Map):
+
+### 1. UCC Article 3 — Negotiable Instruments
+- **Citations:** § 3‑104(a), § 3‑201, § 3‑204.
+- **Anchor:** A coupon with order language, when signed, can be argued to meet the elements of a negotiable instrument.
+
+### 2. Securities Law — Coupons as Value
+- **Precedent:** Case law like *New York Trust Co. v. Island Oil & Transport Corp.* affirms that detachable coupons can be treated as independently enforceable obligations.
+- **Anchor:** Legal tradition recognizes that coupons can embody value, not just act as administrative slips.
+
+### 3. Doctrine of Writing / Integration
+- **Anchor:** Anything written upon an instrument (like an endorsement) is legally treated as if it were part of the instrument from its inception.
+
+### 4. Oversight vs. Definition
+- **Anchor:** Remedy narratives must distinguish between administrative practice (treating coupons as valueless) and controlling statutory definitions (which give them legal potential).
+
+### 5. Remedies & Enforcement
+- **Citation:** UCC § 3‑301.
+- **Anchor:** Once endorsed, a coupon can be enforced by whoever lawfully possesses it, creating a pathway for asserting rights.
+
+### 6. Trust & Property Overlay
+- **Citation:** Restatement (Third) of Trusts § 85.
+- **Anchor:** Coupons endorsed into a trust become trust property, enabling tax and exemption strategies.
+
+### 7. Federal Rules of Evidence
+- **Citation:** Rule 1002 (Best Evidence Rule).
+- **Anchor:** The original endorsed coupon carries significant evidentiary weight in any litigation.
+
+### 8. Administrative Overlay
+- **Citation:** APA § 706(2)(A).
+- **Anchor:** Judicial review provides a mechanism to challenge and overturn agency decisions that dismiss endorsed coupons based on mere practice rather than law.
+
+### 9. Agency & Fiduciary Overlay
+- **Doctrine:** *Qui facit per alium facit per se* (He who acts through another acts himself).
+- **Anchor:** The signature is a directive from a Principal (the sovereign) to a fiduciary Agent (the institution), compelling performance.
+
+### 10. Contract Law — Accord & Satisfaction
+- **Citation:** UCC § 3‑311.
+- **Anchor:** A restrictive endorsement creates a binding contractual offer. The creditor's acceptance by processing the instrument extinguishes the debt.
+
+### 11. Property Law — Bundle of Sticks
+- **Concept:** An endorsement is a precise legal act that conveys a specific property right—the right to apply value for discharge—to the endorsee.
+- **Anchor:** The act is a conveyance of property, not merely a signature.
+
+### 12. Maxims of Equity
+- **Maxims:** *Aequitas agit in personam* (Equity acts upon the person); *He who seeks equity must do equity*.
+- **Anchor:** Returning the instrument for settlement is an act of good faith, compelling the creditor to also act in equity.
+
+TASK:
+Based on the user's data, you will generate two items in a single JSON object:
+1.  **allongeText**: The full, formatted text of the formal Allonge slip.
+2.  **legalRationale**: A concise, narratable corpus entry explaining the legal basis for the endorsement, using the full, extended framework above. Incorporate specific citations and doctrines.
+
+Example Rationale (Fully Extended Narratable Corpus Entry):
+“Coupons, when endorsed, stand as negotiable instruments under UCC Article 3 and are independently enforceable per securities law. The endorsement itself is a binding contractual offer of accord and satisfaction (UCC § 3‑311) and a Principal’s directive to their Agent. By this act, specific property rights are conveyed, compelling performance in equity. Administrative practice cannot override this chain of statutory and doctrinal authority.”
+`;
+
 /**
  * Performs a deep semantic scan using Gemini 3.0 Pro with Thinking Mode.
  */
@@ -276,9 +339,6 @@ export const scanDocumentSemanticsFromMedia = async (base64Data: string, mimeTyp
  * Uses Flash for speed and cost-efficiency.
  */
 export const parseInstrument = async (rawText: string): Promise<InstrumentData> => {
-  if (!apiKey) {
-    throw new Error("API key is not configured. Please set GEMINI_API_KEY in your .env file.");
-  }
   const modelId = MODEL_FLASH;
 
   const config: GenerateContentConfig = {
@@ -325,9 +385,6 @@ export const parseInstrument = async (rawText: string): Promise<InstrumentData> 
  * Parses an instrument from an image OR PDF using Multimodal capabilities.
  */
 export const parseDocumentFromMedia = async (base64Data: string, mimeType: string): Promise<InstrumentData> => {
-  if (!apiKey) {
-    throw new Error("API key is not configured. Please set GEMINI_API_KEY in your .env file.");
-  }
   const modelId = MODEL_FLASH;
 
   const config: GenerateContentConfig = {
@@ -683,35 +740,46 @@ export const draftUCC1Statement = async (data: DraftUCC1Data) => {
 };
 
 /**
- * Generates an Endorsement Allonge (Attachment).
+ * Generates an Endorsement Allonge (Attachment) and its legal rationale.
  * Now supports Notary Blocks and Digital Signatures.
+ * Returns a structured object with the allonge text and the rationale.
  */
-export const generateAllonge = async (data: GenerateAllongeData) => {
+export const generateAllonge = async (data: GenerateAllongeData): Promise<{ allongeText: string; legalRationale: string; }> => {
   const prompt = `
-    Draft a formal "Allonge" (Attachment to Instrument).
-    
-    Instrument Reference: ${data.accountNumber}
-    Creditor: ${data.creditorName}
-    Amount: ${data.amount}
-    Endorsement Type: ${data.type} (e.g., Accepted for Value, Without Recourse)
-    Signer: ${data.signerName}
-    Include Notary Block: ${data.includeNotary}
-    Digital Signature Hash: ${data.digitalSignature || "N/A"}
-    
-    Format:
-    Create a clean, rectangular "slip" layout text.
-    Include "ALLONGE TO PROMISSORY NOTE / INSTRUMENT" at the top.
-    "Pay to the Order of: United States Treasury" (if A4V).
-    "Without Recourse"
-    Signature Lines.
-    Reference to UCC 3-204 (Endorsement).
-    
-    If 'Include Notary Block' is true, append a state-generic Jurat for Notary Public acknowledgement at the bottom.
-    If 'Digital Signature Hash' is present, include a section labeled "ELECTRONIC SIGNATURE VERIFICATION" with the hash code.
+    Based on the provided data, generate a JSON object with two keys: "allongeText" and "legalRationale".
+
+    DATA:
+    - Instrument Reference: ${data.accountNumber}
+    - Creditor: ${data.creditorName}
+    - Amount: ${data.amount}
+    - Endorsement Type: ${data.type}
+    - Signer: ${data.signerName}
+    - Include Notary Block: ${data.includeNotary}
+    - Digital Signature Hash: ${data.digitalSignature || "N/A"}
+
+    TASK:
+    1.  **allongeText**: Create the text for a formal "Allonge" slip.
+        -   Format: Clean, rectangular layout.
+        -   Title: "ALLONGE TO PROMISSORY NOTE / INSTRUMENT"
+        -   Content: Include endorsement type ("Pay to the Order of...", "Without Recourse", etc.), reference to UCC 3-204.
+        -   Notary: If "includeNotary" is true, append a generic Jurat for a Notary Public.
+        -   Digital Signature: If a hash is present, include a section for "ELECTRONIC SIGNATURE VERIFICATION".
+
+    2.  **legalRationale**: Provide a concise, narratable legal rationale for the endorsement's effectiveness, based on the system instruction's legal framework.
   `;
 
   try {
-    return await generateDocument(MODEL_FLASH, REMEDY_SYSTEM_INSTRUCTION, prompt);
+    const response = await ai.models.generateContent({
+      model: MODEL_FLASH,
+      contents: prompt,
+      config: {
+        systemInstruction: ALLONGE_SYSTEM_INSTRUCTION,
+        responseMimeType: "application/json",
+      }
+    });
+
+    return cleanAndParseJSON<{ allongeText: string; legalRationale: string; }>(response.text);
+
   } catch (error) {
     console.error("Allonge Generator Error:", error);
     throw error;

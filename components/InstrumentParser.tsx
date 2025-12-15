@@ -47,6 +47,8 @@ const violationOptions = [
   'Misrepresentation of Debt Status'
 ];
 
+import { useAppContext } from '../contexts/AppContext';
+
 interface InstrumentParserProps {
   notify?: NotifyFn;
   onDraftAllonge?: () => void;
@@ -54,6 +56,7 @@ interface InstrumentParserProps {
 }
 
 const InstrumentParser: React.FC<InstrumentParserProps> = ({ notify, onDraftAllonge, onDraftDispute }) => {
+  const { setInstrumentImage } = useAppContext();
   const [mode, setMode] = useState<Mode>('standard');
   const [rawInput, setRawInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -140,6 +143,7 @@ const InstrumentParser: React.FC<InstrumentParserProps> = ({ notify, onDraftAllo
     const reader = new FileReader();
     reader.onload = async () => {
       const result = reader.result as string;
+      setInstrumentImage(result);
       // Extract base64 data (remove data:application/pdf;base64, prefix etc)
       const base64Data = result.split(',')[1];
       const mimeType = file.type || 'application/pdf'; // Fallback if browser doesn't detect

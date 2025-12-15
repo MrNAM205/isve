@@ -15,6 +15,8 @@ interface AppContextType {
   setActiveTab: (tab: Tab) => void;
   draftDisputeData: DraftDisputeData | null;
   setDraftDisputeData: (data: DraftDisputeData | null) => void;
+  instrumentImage: string | null;
+  setInstrumentImage: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
 // Create the context with a default undefined value
@@ -26,6 +28,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [draftDisputeData, setDraftDisputeData] = useState<DraftDisputeData | null>(null);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [instrumentImage, setInstrumentImage] = useState<string | null>(null);
 
   useEffect(() => {
     const profile = getUserProfile();
@@ -69,6 +72,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActiveTab,
     draftDisputeData,
     setDraftDisputeData,
+    instrumentImage,
+    setInstrumentImage,
   };
 
   return (
