@@ -1,30 +1,29 @@
 
 import React, { useState, useRef } from 'react';
 import { 
-  Database, 
-  Upload, 
-  ArrowRight, 
-  Check, 
-  DollarSign, 
-  Calendar,
-  User,
-  AlertOctagon,
+  AlertTriangle,
+  Upload,
+  FileText,
   FileImage,
   Loader2,
-  AlertTriangle,
+  ArrowRight,
+  AlertOctagon,
+  Plus,
+  Database,
   FileSearch,
   Scale,
-  Mail,
-  Plus,
-  FileText,
+  EyeOff,
+  User,
+  DollarSign,
+  Clock,
+  MapPin,
   Scissors,
   Stamp,
-  EyeOff,
-  MapPin,
-  Clock,
-  ShieldAlert,
   FileSignature,
-  Copy
+  Copy,
+  Check,
+  Mail,
+  ShieldAlert
 } from 'lucide-react';
 import { 
   parseDocumentFromMedia, 
@@ -35,7 +34,7 @@ import {
   generateRestrictiveEndorsement,
   generateAccordLetter 
 } from '../services/geminiService';
-import { InstrumentData, TILAAnalysisResult, FDCPAViolation, CreditReportAnalysis, NotifyFn } from '../types';
+import { InstrumentData, TILAAnalysisResult, FDCPAViolation, CreditReportAnalysis, NotifyFn, DraftDisputeData, CreditDisputeItem } from '../types';
 import { saveToClipboard } from '../services/storage';
 
 type Mode = 'standard' | 'tila' | 'credit_report';
@@ -51,7 +50,7 @@ const violationOptions = [
 interface InstrumentParserProps {
   notify?: NotifyFn;
   onDraftAllonge?: () => void;
-  onDraftDispute?: (data: any) => void;
+  onDraftDispute?: (data: DraftDisputeData) => void;
 }
 
 const InstrumentParser: React.FC<InstrumentParserProps> = ({ notify, onDraftAllonge, onDraftDispute }) => {
@@ -254,14 +253,14 @@ const InstrumentParser: React.FC<InstrumentParserProps> = ({ notify, onDraftAllo
     }
   };
 
-  const draftDispute = (item: any) => {
+  const draftDispute = (item: CreditDisputeItem) => {
     if (onDraftDispute) {
        onDraftDispute({
           disputeItem: `Account: ${item.account_number} (${item.creditor}) - Listed as ${item.reason} on ${item.date}. Verification demanded per FCRA 609.`
        });
     }
   };
-
+  
   return (
     <div className="max-w-6xl mx-auto space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">

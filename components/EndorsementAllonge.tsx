@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { generateAllonge } from '../services/geminiService';
 import { getIdentityProfile, getFromClipboard } from '../services/storage';
-import { generateSigningKeyPair, signData, generateDocumentHash } from '../services/security';
+import { getAppKeys, signData, generateDocumentHash } from '../services/security';
 import { NotifyFn } from '../types';
 
 interface EndorsementAllongeProps {
@@ -71,7 +71,7 @@ const EndorsementAllonge: React.FC<EndorsementAllongeProps> = ({ notify }) => {
   // Generate a session key pair for "Digital Ink"
   const handleGenerateKeys = async () => {
     try {
-      const keys = await generateSigningKeyPair();
+      const keys = await getAppKeys();
       setKeyPair(keys.privateKey);
       notify?.('success', "ECDSA Key Pair Generated for Session. You can now digitally sign.");
     } catch (e) {

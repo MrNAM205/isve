@@ -1,11 +1,13 @@
 
+import { saveKey, loadKey } from './db';
+
 /**
  * Cryptographic Utility Service for Sovereign Identity
  * Handles Key Generation, Signing, and Hashing via Web Crypto API
  */
 
 export const generateSigningKeyPair = async (): Promise<{ publicKey: CryptoKey; privateKey: CryptoKey }> => {
-  return window.crypto.subtle.generateKey(
+  const keyPair = await window.crypto.subtle.generateKey(
     {
       name: "ECDSA",
       namedCurve: "P-256",
@@ -13,6 +15,28 @@ export const generateSigningKeyPair = async (): Promise<{ publicKey: CryptoKey; 
     true, // whether the key is extractable (i.e. can be used in exportKey)
     ["sign", "verify"]
   );
+
+  // Save the new keys to IndexedDB
+  await saveKey(keyPair.publicKey, 'publicKey');
+  await saveKey(keyPair.privateKey, 'privateKey');
+
+  return keyPair;
+};
+
+/**
+ * Gets the app's signing key pair.
+ * Tries to load from IndexedDB first, generates and saves a new pair if not found.
+ */
+export const getAppKeys = async (): Promise<{ publicKey: CryptoKey; privateKey: CryptoKey }> => {
+  const publicKey = await loadKey('publicKey');
+  const privateKey = await loadKey('privateKey');
+
+  if (publicKey && privateKey) {
+    return { publicKey, privateKey };
+  }
+
+  // If keys don't exist, generate and save them
+  return generateSigningKeyPair();
 };
 
 export const exportPublicKey = async (key: CryptoKey): Promise<string> => {

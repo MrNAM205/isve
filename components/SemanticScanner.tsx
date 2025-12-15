@@ -10,7 +10,8 @@ import {
   Upload,
   File,
   X,
-  FileImage
+  FileImage,
+  AlertTriangle
 } from 'lucide-react';
 import { scanDocumentSemantics, scanDocumentSemanticsFromMedia } from '../services/geminiService';
 import { SemanticAnalysisResult, NotifyFn } from '../types';
@@ -117,6 +118,15 @@ const SemanticScanner: React.FC<SemanticScannerProps> = ({ notify }) => {
       setIsAnalyzing(false);
     }
   };
+  
+  const getRiskColor = (level: 'Low' | 'Medium' | 'High') => {
+    switch (level) {
+      case 'High': return 'border-red-500 bg-red-500/10 text-red-300';
+      case 'Medium': return 'border-yellow-500 bg-yellow-500/10 text-yellow-300';
+      case 'Low': return 'border-emerald-500 bg-emerald-500/10 text-emerald-300';
+      default: return 'border-slate-700 bg-slate-800/50 text-slate-300';
+    }
+  };
 
   return (
     <div className="h-[calc(100vh-8rem)] flex flex-col lg:flex-row gap-6">
@@ -206,7 +216,7 @@ const SemanticScanner: React.FC<SemanticScannerProps> = ({ notify }) => {
         <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900">
           <div className="flex items-center gap-2 text-slate-200">
             <BrainCircuit className="w-5 h-5 text-amber-500" />
-            <h2 className="font-semibold">Analysis Matrix</h2>
+            <h2 className="font-semibold">Risk Analysis Matrix</h2>
           </div>
           {isAnalyzing && (
              <span className="text-xs font-mono text-amber-500 animate-pulse">USING GEMINI 3.0 PRO REASONING</span>
@@ -224,7 +234,7 @@ const SemanticScanner: React.FC<SemanticScannerProps> = ({ notify }) => {
           {!result && !isAnalyzing && !error && (
             <div className="h-full flex flex-col items-center justify-center text-slate-500">
               <ScanEye className="w-16 h-16 mb-4 opacity-20" />
-              <p className="text-sm">Ready to decode legalese and identify traps.</p>
+              <p className="text-sm">Ready to decode legalese and assess risk.</p>
               <p className="text-xs mt-2 opacity-50">Gemini 3.0 Pro Thinking Enabled (32k tokens)</p>
             </div>
           )}
@@ -233,46 +243,44 @@ const SemanticScanner: React.FC<SemanticScannerProps> = ({ notify }) => {
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               {/* Summary */}
               <div className="p-4 rounded-lg bg-slate-900 border border-slate-800">
-                <h3 className="text-xs font-mono text-slate-500 uppercase tracking-wider mb-2">Executive Summary</h3>
+                <h3 className="text-xs font-mono text-slate-500 uppercase tracking-wider mb-2">Analysis Summary</h3>
                 <p className="text-slate-300 text-sm leading-relaxed">{result.summary}</p>
               </div>
 
-              {/* Jurisdiction */}
-              <div className="flex items-center gap-3 p-3 rounded bg-slate-900 border border-slate-800">
-                <div className="h-2 w-2 rounded-full bg-red-500" />
-                <span className="text-xs text-slate-400">Jurisdiction Claimed:</span>
-                <span className="text-sm font-semibold text-red-400">{result.jurisdiction_claimed}</span>
-              </div>
-
-              {/* Traps */}
+              {/* Risk Analysis Cards */}
               <div>
                 <h3 className="flex items-center gap-2 text-sm font-semibold text-amber-500 mb-3">
-                  <ShieldAlert className="w-4 h-4" />
-                  Identified Semantic Traps
+                  <AlertTriangle className="w-4 h-4" />
+                  Identified Terms & Risk Assessment
                 </h3>
-                <ul className="space-y-2">
-                  {result.traps.map((trap, idx) => (
-                    <li key={idx} className="flex items-start gap-2 text-sm text-slate-300 p-2 rounded bg-amber-500/5 border border-amber-500/10">
-                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-amber-500 flex-shrink-0" />
-                      {trap}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Strategy */}
-              <div className="border-t border-slate-800 pt-4">
-                 <h3 className="text-sm font-semibold text-indigo-400 mb-3">Rebuttal Strategy</h3>
-                 <p className="text-sm text-slate-300 mb-4">{result.rebuttal_strategy}</p>
-                 
-                 <div className="space-y-2">
-                    {result.suggested_affidavit_points.map((point, idx) => (
-                      <div key={idx} className="flex items-center gap-2 text-xs font-mono text-slate-400">
-                        <ChevronRight className="w-3 h-3 text-indigo-500" />
-                        {point}
+                <div className="space-y-4">
+                  {result.riskAnalysis.map((item, idx) => (
+                    <div key={idx} className={`p-4 rounded-lg border ${getRiskColor(item.riskLevel)}`}>
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-bold text-lg text-slate-100">{item.term}</h4>
+                        <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${getRiskColor(item.riskLevel).replace('border-', 'bg-').replace('/10', '/20')} border-none`}>
+                          {item.riskLevel} RISK
+                        </span>
                       </div>
-                    ))}
-                 </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div className="bg-slate-900/50 p-3 rounded">
+                          <p className="text-xs text-slate-400 font-mono mb-1">Conventional Definition</p>
+                          <p className="text-slate-300">{item.conventionalDefinition}</p>
+                        </div>
+                        <div className="bg-slate-900/50 p-3 rounded">
+                          <p className="text-xs text-slate-400 font-mono mb-1">Alternative Interpretation</p>
+                          <p className="text-slate-300">{item.alternativeInterpretation}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="mt-4">
+                         <p className="text-xs text-slate-400 font-mono mb-1">Risk Rationale</p>
+                         <p className="text-xs text-slate-400 p-3 bg-slate-900/50 rounded">{item.rationale}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}

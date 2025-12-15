@@ -1,11 +1,11 @@
 
-import { Creditor, UserProfile, Template, IdentityProfile, InstrumentData, CallScript, RemedyProcess, CommercialInvoice } from '../types';
+import { Creditor, UserProfile, Template, IdentityProfile, InstrumentData, CallScript, RemedyProcess, CommercialInvoice, DialogosAnalysisResult, IdentityDocumentData } from '../types';
 
 export interface VaultDocument {
   id: string;
   type: string;
   name: string; // Filename or Document Name
-  metadata: any; // The extracted JSON from Gemini
+  metadata: InstrumentData | DialogosAnalysisResult | IdentityDocumentData | any; // The extracted JSON from Gemini
   dateUploaded: string;
 }
 
@@ -21,7 +21,11 @@ const INVOICES_KEY = 'verobrix_invoices';
 
 // --- Clipboard (Passing Data) ---
 export const saveToClipboard = (data: InstrumentData) => {
-  localStorage.setItem(CLIPBOARD_KEY, JSON.stringify(data));
+  try {
+    localStorage.setItem(CLIPBOARD_KEY, JSON.stringify(data));
+  } catch (e) {
+    console.error(`Storage write error for key ${CLIPBOARD_KEY}:`, e);
+  }
 };
 
 export const getFromClipboard = (): InstrumentData | null => {
@@ -34,7 +38,11 @@ export const getFromClipboard = (): InstrumentData | null => {
 };
 
 export const clearClipboard = () => {
-  localStorage.removeItem(CLIPBOARD_KEY);
+  try {
+    localStorage.removeItem(CLIPBOARD_KEY);
+  } catch (e) {
+    console.error(`Storage remove error for key ${CLIPBOARD_KEY}:`, e);
+  }
 };
 
 // --- Vault Storage ---
@@ -77,11 +85,19 @@ export const getUserProfile = (): UserProfile | null => {
 };
 
 export const saveUserProfile = (profile: UserProfile) => {
-  localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  try {
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  } catch (e) {
+    console.error(`Storage write error for key ${PROFILE_KEY}:`, e);
+  }
 };
 
 export const clearUserProfile = () => {
-  localStorage.removeItem(PROFILE_KEY);
+  try {
+    localStorage.removeItem(PROFILE_KEY);
+  } catch (e) {
+    console.error(`Storage remove error for key ${PROFILE_KEY}:`, e);
+  }
 };
 
 // --- Identity Profile ---
@@ -96,71 +112,78 @@ export const getIdentityProfile = (): IdentityProfile | null => {
 };
 
 export const saveIdentityProfile = (profile: IdentityProfile) => {
-  localStorage.setItem(IDENTITY_KEY, JSON.stringify(profile));
+  try {
+    localStorage.setItem(IDENTITY_KEY, JSON.stringify(profile));
+  } catch (e) {
+    console.error(`Storage write error for key ${IDENTITY_KEY}:`, e);
+  }
 };
+
+function createStorageCollection<T extends { id: string }>(key: string, defaultData: T[] = []) {
+  const getAll = (): T[] => {
+    try {
+      const data = localStorage.getItem(key);
+      return data ? JSON.parse(data) : defaultData;
+    } catch (e) {
+      console.error(`Storage read error for key ${key}:`, e);
+      return defaultData;
+    }
+  };
+
+  const saveAll = (items: T[]) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(items));
+    } catch (e) {
+      console.error(`Storage write error for key ${key}:`, e);
+      // Here, we could also notify the user that storage failed.
+    }
+  };
+
+  const save = (item: T) => {
+    const items = getAll();
+    // To prevent duplicates, check if an item with the same id already exists
+    const index = items.findIndex(i => i.id === item.id);
+    if (index > -1) {
+      items[index] = item; // Update existing
+    } else {
+      items.unshift(item); // Add new
+    }
+    saveAll(items);
+  };
+
+  const remove = (id: string) => {
+    const items = getAll().filter(i => i.id !== id);
+    saveAll(items);
+  };
+
+  return {
+    getAll,
+    save,
+    saveAll,
+    remove,
+  };
+}
+
 
 // --- Creditor Book ---
 
-export const getCreditors = (): Creditor[] => {
-  try {
-    const data = localStorage.getItem(CREDITORS_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch (e) {
-    return [];
-  }
-};
-
-export const saveCreditor = (creditor: Creditor) => {
-  const list = getCreditors();
-  list.unshift(creditor);
-  localStorage.setItem(CREDITORS_KEY, JSON.stringify(list));
-};
-
-export const removeCreditor = (id: string) => {
-  const list = getCreditors().filter(c => c.id !== id);
-  localStorage.setItem(CREDITORS_KEY, JSON.stringify(list));
-};
+const creditorStorage = createStorageCollection<Creditor>(CREDITORS_KEY);
+export const getCreditors = creditorStorage.getAll;
+export const saveCreditor = creditorStorage.save;
+export const removeCreditor = creditorStorage.remove;
 
 // --- Remedy Processes (Administrative Tracker) ---
 
-export const getRemedyProcesses = (): RemedyProcess[] => {
-  try {
-    const data = localStorage.getItem(REMEDY_PROCESS_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch (e) { return []; }
-};
-
-export const saveRemedyProcess = (process: RemedyProcess) => {
-  const list = getRemedyProcesses();
-  // Update if exists, else push
-  const index = list.findIndex(p => p.id === process.id);
-  if (index >= 0) {
-    list[index] = process;
-  } else {
-    list.unshift(process);
-  }
-  localStorage.setItem(REMEDY_PROCESS_KEY, JSON.stringify(list));
-};
-
-export const deleteRemedyProcess = (id: string) => {
-  const list = getRemedyProcesses().filter(p => p.id !== id);
-  localStorage.setItem(REMEDY_PROCESS_KEY, JSON.stringify(list));
-};
+const remedyProcessStorage = createStorageCollection<RemedyProcess>(REMEDY_PROCESS_KEY);
+export const getRemedyProcesses = remedyProcessStorage.getAll;
+export const saveRemedyProcess = remedyProcessStorage.save;
+export const deleteRemedyProcess = remedyProcessStorage.remove;
 
 // --- Commercial Invoices (Fee Enforcer) ---
 
-export const getInvoices = (): CommercialInvoice[] => {
-  try {
-    const data = localStorage.getItem(INVOICES_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch (e) { return []; }
-};
-
-export const saveInvoice = (invoice: CommercialInvoice) => {
-  const list = getInvoices();
-  list.unshift(invoice);
-  localStorage.setItem(INVOICES_KEY, JSON.stringify(list));
-};
+const invoiceStorage = createStorageCollection<CommercialInvoice>(INVOICES_KEY);
+export const getInvoices = invoiceStorage.getAll;
+export const saveInvoice = invoiceStorage.save;
 
 // --- Template Library ---
 
@@ -247,29 +270,40 @@ const DEFAULT_TEMPLATES: Template[] = [
   }
 ];
 
-export const getTemplates = (): Template[] => {
+const getStoredItems = <T>(key: string): T[] => {
   try {
-    const saved = localStorage.getItem(TEMPLATES_KEY);
-    const customTemplates = saved ? JSON.parse(saved) : [];
-    return [...DEFAULT_TEMPLATES, ...customTemplates];
+    const data = localStorage.getItem(key);
+    return data ? JSON.parse(data) : [];
   } catch (e) {
-    return DEFAULT_TEMPLATES;
+    console.error(`Storage read error for key ${key}:`, e);
+    return [];
   }
 };
 
+export const getTemplates = (): Template[] => {
+  const customTemplates = getStoredItems<Template>(TEMPLATES_KEY);
+  return [...DEFAULT_TEMPLATES, ...customTemplates];
+};
+
 export const saveTemplate = (template: Template) => {
-  const saved = localStorage.getItem(TEMPLATES_KEY);
-  const list = saved ? JSON.parse(saved) : [];
-  list.push(template);
-  localStorage.setItem(TEMPLATES_KEY, JSON.stringify(list));
+  const customTemplates = getStoredItems<Template>(TEMPLATES_KEY);
+  // Add new, assuming custom templates have a unique ID
+  const updatedTemplates = [...customTemplates, template];
+  try {
+    localStorage.setItem(TEMPLATES_KEY, JSON.stringify(updatedTemplates));
+  } catch (e) {
+    console.error(`Storage write error for key ${TEMPLATES_KEY}:`, e);
+  }
 };
 
 export const deleteCustomTemplate = (id: string) => {
-  const saved = localStorage.getItem(TEMPLATES_KEY);
-  if (!saved) return;
-  const list = JSON.parse(saved) as Template[];
-  const updated = list.filter(t => t.id !== id);
-  localStorage.setItem(TEMPLATES_KEY, JSON.stringify(updated));
+  const customTemplates = getStoredItems<Template>(TEMPLATES_KEY);
+  const updatedTemplates = customTemplates.filter(t => t.id !== id);
+  try {
+    localStorage.setItem(TEMPLATES_KEY, JSON.stringify(updatedTemplates));
+  } catch (e) {
+    console.error(`Storage write error for key ${TEMPLATES_KEY}:`, e);
+  }
 };
 
 // --- TeleCounsel Scripts ---
@@ -392,18 +426,16 @@ const DEFAULT_SCRIPTS: CallScript[] = [
 ];
 
 export const getCallScripts = (): CallScript[] => {
-  try {
-    const saved = localStorage.getItem(SCRIPTS_KEY);
-    const custom = saved ? JSON.parse(saved) : [];
-    return [...DEFAULT_SCRIPTS, ...custom];
-  } catch (e) {
-    return DEFAULT_SCRIPTS;
-  }
+  const customScripts = getStoredItems<CallScript>(SCRIPTS_KEY);
+  return [...DEFAULT_SCRIPTS, ...customScripts];
 };
 
 export const saveCallScript = (script: CallScript) => {
-  const saved = localStorage.getItem(SCRIPTS_KEY);
-  const list = saved ? JSON.parse(saved) : [];
-  list.push(script);
-  localStorage.setItem(SCRIPTS_KEY, JSON.stringify(list));
+  const customScripts = getStoredItems<CallScript>(SCRIPTS_KEY);
+  const updatedScripts = [...customScripts, script];
+  try {
+    localStorage.setItem(SCRIPTS_KEY, JSON.stringify(updatedScripts));
+  } catch (e) {
+    console.error(`Storage write error for key ${SCRIPTS_KEY}:`, e);
+  }
 };

@@ -420,10 +420,17 @@ const UCCFiling: React.FC = () => {
               </div>
             </div>
 
-            <div className="mt-8 flex-1 overflow-y-auto">
+            <div className="mt-8 flex-1 overflow-y-auto relative">
               {generatedDoc ? (
-                <div className="bg-white text-black p-12 shadow-2xl min-h-[800px] w-full max-w-[800px] mx-auto font-serif text-sm leading-relaxed whitespace-pre-wrap selection:bg-blue-200 selection:text-black">
-                  {generatedDoc}
+                <div className="relative w-full max-w-[800px] mx-auto">
+                  <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+                    <span className="text-7xl md:text-8xl lg:text-9xl font-black text-red-500/10 transform -rotate-15 select-none">
+                      FOR EDUCATIONAL PURPOSES ONLY
+                    </span>
+                  </div>
+                  <div className="bg-white text-black p-12 shadow-2xl min-h-[800px] w-full font-serif text-sm leading-relaxed whitespace-pre-wrap selection:bg-blue-200 selection:text-black">
+                    {generatedDoc}
+                  </div>
                 </div>
               ) : (
                 <div className="h-full flex flex-col items-center justify-center text-slate-600 select-none">

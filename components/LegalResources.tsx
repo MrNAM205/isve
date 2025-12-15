@@ -18,9 +18,13 @@ import {
   Anchor,
   Landmark,
   Scroll,
-  Globe
+  Globe,
+  Database,
+  Loader2
 } from 'lucide-react';
 import { GlossaryTerm, Statute, NotifyFn } from '../types';
+import { seedFrcpData, seedConstitutionData } from '../services/corpusSeeder';
+import CorpusBrowser from './CorpusBrowser';
 
 interface LegalResourcesProps {
   notify?: NotifyFn;
@@ -137,8 +141,13 @@ const GLOSSARY_DB: GlossaryTerm[] = [
   },
   {
     term: "Accepted for Value (A4V)",
-    definition: "A commercial process of accepting a presentment (bill/claim) and returning it to the issuer for discharge, rather than dishonoring it.",
-    sovereign_note: "COMMERCE: Based on the concept that U.S. citizens are creditors of the bankrupt US Corporation (HJR 192). Silence is dishonor; acceptance is remedy."
+    definition: "A commercial process of accepting a presentment (bill/claim) and returning it to the issuer, or a government entity like the Treasury, for discharge against a theoretical account.",
+    sovereign_note: "COMMERCE: Based on the concept that U.S. citizens are creditors of the bankrupt US Corporation (HJR 192). The conventional financial system does not have a public, standardized process for this theory."
+  },
+  {
+    term: "Tender of Payment (Conventional)",
+    definition: "An offer of money in satisfaction of a debt. Under UCC § 3-603, refusal of a valid tender can stop the accrual of interest but typically does not discharge the principal debt itself. The U.S. Treasury's 'tender' process refers to the auction bidding system for government securities.",
+    sovereign_note: "DISTINCTION: Understand the difference between tendering payment in a standard commercial transaction versus the A4V theory of tendering an instrument to the Treasury for discharge."
   },
   {
     term: "Sui Juris",
@@ -173,6 +182,28 @@ const GLOSSARY_DB: GlossaryTerm[] = [
 ];
 
 const STATUTE_DB: Statute[] = [
+  {
+    id: 'frcp-12b1',
+    title: 'Lack of Subject-Matter Jurisdiction',
+    citation: 'FRCP Rule 12(b)(1)',
+    fullText: `Every defense to a claim for relief in any pleading must be asserted in the responsive pleading if one is required. But a party may assert the following defenses by motion: (1) lack of subject-matter jurisdiction... If the court determines at any time that it lacks subject-matter jurisdiction, the court must dismiss the action.`,
+    riskAnalysis: {
+      frictionLevel: 'Low',
+      mainstreamView: 'A standard motion to argue that the case does not belong in federal court (e.g., no federal question, no diversity). It is non-waivable and can be raised at any time.',
+      sovereignView: 'A primary tool. Argue that the state or federal court lacks jurisdiction over a sovereign being. This motion compels the court to prove its authority to hear the case.'
+    }
+  },
+  {
+    id: 'frcp-12b6',
+    title: 'Failure to State a Claim Upon Which Relief Can Be Granted',
+    citation: 'FRCP Rule 12(b)(6)',
+    fullText: `Every defense to a claim for relief in any pleading must be asserted in the responsive pleading if one is required. But a party may assert the following defenses by motion: ... (6) failure to state a claim upon which relief can be granted.`,
+    riskAnalysis: {
+      frictionLevel: 'Medium',
+      mainstreamView: 'Argues that, even if all facts presented by the plaintiff are true, they do not constitute a valid legal claim under the "plausibility standard" of Twombly and Iqbal.',
+      sovereignView: 'Challenge the accuser to prove they have a valid claim. Demand they show evidence of injury, a valid contract, and standing. Use to dismiss claims that lack a clear, factual basis for harm.'
+    }
+  },
   {
     id: 'murdock-v-pa',
     title: 'Murdock v. Pennsylvania',
@@ -260,10 +291,44 @@ const ECONOMICS_TABLE = [
 ];
 
 const LegalResources: React.FC<LegalResourcesProps> = ({ notify }) => {
-  const [activeTab, setActiveTab] = useState<'codex' | 'statutes' | 'glossary' | 'citations' | 'economics' | 'library'>('codex');
+  const [activeTab, setActiveTab] = useState<'codex' | 'statutes' | 'glossary' | 'citations' | 'economics' | 'library' | 'corpus'>('codex');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatute, setSelectedStatute] = useState<Statute>(STATUTE_DB[0]);
   const [citationList, setCitationList] = useState<string[]>([]);
+  const [isFrcpSeeding, setIsFrcpSeeding] = useState(false);
+  const [frcpSeedingLog, setFrcpSeedingLog] = useState<string[]>([]);
+  const [isConstitutionSeeding, setIsConstitutionSeeding] = useState(false);
+  const [constitutionSeedingLog, setConstitutionSeedingLog] = useState<string[]>([]);
+
+  const handleFrcpSeed = async () => {
+    setIsFrcpSeeding(true);
+    setFrcpSeedingLog([]);
+    const onProgress = (message: string) => {
+      setFrcpSeedingLog(prev => [...prev, message]);
+    };
+    const result = await seedFrcpData(onProgress);
+    if (result.success) {
+      notify?.('success', `Successfully seeded ${result.count} FRCP rules.`);
+    } else {
+      notify?.('error', `Seeding failed: ${result.error}`);
+    }
+    setIsFrcpSeeding(false);
+  };
+
+  const handleConstitutionSeed = async () => {
+    setIsConstitutionSeeding(true);
+    setConstitutionSeedingLog([]);
+    const onProgress = (message: string) => {
+      setConstitutionSeedingLog(prev => [...prev, message]);
+    };
+    const result = await seedConstitutionData(onProgress);
+    if (result.success) {
+      notify?.('success', `Successfully seeded ${result.count} Constitution items.`);
+    } else {
+      notify?.('error', `Seeding failed: ${result.error}`);
+    }
+    setIsConstitutionSeeding(false);
+  };
 
   const filteredTerms = GLOSSARY_DB.filter(t => 
     t.term.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -349,8 +414,72 @@ const LegalResources: React.FC<LegalResourcesProps> = ({ notify }) => {
              >
                <Library className="w-4 h-4" /> Links
              </button>
+             <button 
+               onClick={() => setActiveTab('corpus')}
+               className={`px-4 py-2 rounded text-sm font-medium transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'corpus' ? 'bg-red-600 text-white' : 'text-slate-400 hover:text-white'}`}
+             >
+               <Database className="w-4 h-4" /> Corpus Manager
+             </button>
           </div>
        </div>
+
+       {/* --- CORPUS MANAGER & BROWSER --- */}
+       {activeTab === 'corpus' && (
+         <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 flex flex-col p-6 animate-in fade-in">
+            <div className="flex justify-between items-center mb-6">
+               <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                 <Database className="w-5 h-5 text-indigo-500" /> Corpus Manager
+               </h3>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              {/* FRCP Seeder */}
+              <div className="p-4 bg-slate-950 rounded-lg border border-slate-800">
+                <button
+                  onClick={handleFrcpSeed}
+                  disabled={isFrcpSeeding || isConstitutionSeeding}
+                  className="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-medium rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isFrcpSeeding ? <Loader2 className="animate-spin w-4 h-4"/> : <Gavel className="w-4 h-4" />}
+                  Seed FRCP
+                </button>
+                {frcpSeedingLog.length > 0 && (
+                  <div className="mt-4">
+                    <h4 className="text-xs font-mono text-slate-500 uppercase mb-2">FRCP Log:</h4>
+                    <pre className="text-xs font-mono text-slate-400 h-24 overflow-y-auto bg-black p-2 rounded">
+                      {frcpSeedingLog.join('\n')}
+                    </pre>
+                  </div>
+                )}
+              </div>
+
+              {/* Constitution Seeder */}
+              <div className="p-4 bg-slate-950 rounded-lg border border-slate-800">
+                <button
+                  onClick={handleConstitutionSeed}
+                  disabled={isFrcpSeeding || isConstitutionSeeding}
+                  className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isConstitutionSeeding ? <Loader2 className="animate-spin w-4 h-4"/> : <Globe className="w-4 h-4" />}
+                  Seed U.S. Constitution
+                </button>
+                {constitutionSeedingLog.length > 0 && (
+                  <div className="mt-4">
+                    <h4 className="text-xs font-mono text-slate-500 uppercase mb-2">Constitution Log:</h4>
+                    <pre className="text-xs font-mono text-slate-400 h-24 overflow-y-auto bg-black p-2 rounded">
+                      {constitutionSeedingLog.join('\n')}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <h3 className="text-lg font-bold text-white flex items-center gap-2 mb-4">
+              <BookOpen className="w-5 h-5 text-indigo-500" /> Corpus Browser
+            </h3>
+            <CorpusBrowser />
+         </div>
+       )}
 
        {/* --- CODEX (MASTER FILE) --- */}
        {activeTab === 'codex' && (
@@ -638,34 +767,42 @@ const LegalResources: React.FC<LegalResourcesProps> = ({ notify }) => {
 
        {/* --- EXTERNAL LINKS --- */}
        {activeTab === 'library' && (
-         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
-            <ResourceCard 
-              title="Uniform Commercial Code"
-              icon={<Scale className="w-6 h-6 text-amber-500" />}
-              items={[
-                { label: "UCC 1-308: Reservation of Rights", link: "https://www.law.cornell.edu/ucc/1/1-308" },
-                { label: "UCC 3-603: Tender of Payment", link: "https://www.law.cornell.edu/ucc/3/3-603" },
-                { label: "UCC 9-109: Scope of Article 9", link: "https://www.law.cornell.edu/ucc/9/9-109" }
-              ]}
-            />
-            <ResourceCard 
-              title="Consumer Protection"
-              icon={<Gavel className="w-6 h-6 text-indigo-500" />}
-              items={[
-                { label: "FDCPA (15 USC 1692)", link: "https://www.ftc.gov/legal-library/browse/rules/fair-debt-collection-practices-act-text" },
-                { label: "FCRA (15 USC 1681)", link: "https://www.ftc.gov/legal-library/browse/statutes/fair-credit-reporting-act" },
-                { label: "TILA (15 USC 1601)", link: "https://www.fdic.gov/regulations/laws/rules/6500-200.html" }
-              ]}
-            />
-             <ResourceCard 
-              title="Maxims of Law"
-              icon={<BookOpen className="w-6 h-6 text-emerald-500" />}
-              items={[
-                { label: "Commerce & Truth", link: "#" },
-                { label: "Unrebutted Affidavit", link: "#" },
-                { label: "Notice to Agent is Notice to Principal", link: "#" }
-              ]}
-            />
+         <div className="space-y-8 animate-in fade-in duration-300">
+           <div className="p-4 bg-yellow-900/20 border border-yellow-500/30 rounded-lg text-sm text-yellow-200">
+             <h4 className="font-bold flex items-center gap-2"><AlertTriangle className="w-4 h-4" />Important Note</h4>
+             <p className="mt-1">
+               This application is an educational tool, not a law firm. The resources generated are for informational purposes only. For any serious legal issue, it is critical to consult with a qualified, licensed attorney in your jurisdiction.
+             </p>
+           </div>
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <ResourceCard
+                title="Find a Qualified Attorney"
+                icon={<Gavel className="w-6 h-6 text-emerald-500" />}
+                items={[
+                  { label: "Legal Services Corporation (LSC)", link: "https://www.lsc.gov/about-lsc/what-legal-aid/find-legal-aid" },
+                  { label: "American Bar Association - Find Legal Help", link: "https://www.americanbar.org/groups/legal_services/flh-home" },
+                  { label: "FindLaw Directory", link: "https://lawyers.findlaw.com/" },
+                ]}
+              />
+              <ResourceCard 
+                title="Uniform Commercial Code (UCC)"
+                icon={<Scale className="w-6 h-6 text-amber-500" />}
+                items={[
+                  { label: "Cornell Law - UCC Overview", link: "https://www.law.cornell.edu/ucc" },
+                  { label: "UCC 1-308: Reservation of Rights", link: "https://www.law.cornell.edu/ucc/1/1-308" },
+                  { label: "UCC Article 9: Secured Transactions", link: "https://www.law.cornell.edu/ucc/9" }
+                ]}
+              />
+              <ResourceCard 
+                title="Federal Statutes & Rules"
+                icon={<Landmark className="w-6 h-6 text-indigo-500" />}
+                items={[
+                  { label: "Fair Debt Collection Practices Act (FDCPA)", link: "https://www.ftc.gov/legal-library/browse/rules/fair-debt-collection-practices-act-text" },
+                  { label: "Fair Credit Reporting Act (FCRA)", link: "https://www.ftc.gov/legal-library/browse/statutes/fair-credit-reporting-act" },
+                  { label: "Truth in Lending Act (TILA)", link: "https://www.fdic.gov/regulations/laws/rules/6500-200.html" }
+                ]}
+              />
+           </div>
          </div>
        )}
     </div>

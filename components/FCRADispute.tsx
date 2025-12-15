@@ -13,11 +13,11 @@ import {
 } from 'lucide-react';
 import { generateFCRADispute, analyzeCreditReport } from '../services/geminiService';
 import { getIdentityProfile } from '../services/storage';
-import { CreditReportAnalysis, NotifyFn } from '../types';
+import { CreditReportAnalysis, NotifyFn, DraftDisputeData } from '../types';
 
 interface FCRADisputeProps {
   notify?: NotifyFn;
-  initialData?: any;
+  initialData?: DraftDisputeData | null;
 }
 
 const FCRADispute: React.FC<FCRADisputeProps> = ({ notify, initialData }) => {
@@ -45,7 +45,7 @@ const FCRADispute: React.FC<FCRADisputeProps> = ({ notify, initialData }) => {
     if (initialData && initialData.disputeItem) {
         setFormData(prev => ({
             ...prev,
-            disputeItem: initialData.disputeItem,
+            disputeItem: initialData.disputeItem || '',
             name: profile?.legalName || prev.name,
             address: profile?.mailingAddress || prev.address
         }));

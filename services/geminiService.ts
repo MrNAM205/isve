@@ -1,12 +1,35 @@
 
 import { GoogleGenAI, Type, GenerateContentConfig } from "@google/genai";
-import { TILAAnalysisResult, InstrumentData, CallScript } from "../types";
+import { 
+  TILAAnalysisResult, 
+  InstrumentData, 
+  CallScript,
+  FDCPAViolation,
+  GenerateAffidavitData,
+  GenerateA4VData,
+  GenerateFCRADisputeData,
+  GenerateCeaseDesistData,
+  DraftUCC1Data,
+  GenerateAllongeData,
+  GenerateTrustIndentureData,
+  GenerateAssetAssignmentData,
+  GenerateCopyrightNoticeData,
+  GenerateRestrictiveEndorsementData,
+  GenerateAccordLetterData,
+  GenerateSovereignNoteData,
+  GenerateAdminNoticeData,
+  GenerateInvoiceData,
+  GenerateRescissionNoticeData
+} from "../types";
 
 // NOTE: In a real production app, API keys should be handled via backend proxy or secure env vars.
 // For this demo, we assume process.env.API_KEY is injected by the environment.
 const apiKey = process.env.API_KEY || '';
 
 const ai = new GoogleGenAI({ apiKey });
+
+const MODEL_FLASH = 'gemini-2.5-flash';
+const MODEL_PRO = 'gemini-3-pro-preview';
 
 /**
  * Helper to clean and parse JSON from LLM output.
@@ -32,31 +55,66 @@ const cleanAndParseJSON = <T>(text: string): T => {
   }
 };
 
+const generateDocument = async (
+  modelId: string,
+  systemInstruction: string,
+  prompt: string,
+  temperature: number = 0.3
+): Promise<string> => {
+  try {
+    const response = await ai.models.generateContent({
+      model: modelId,
+      contents: prompt,
+      config: {
+        systemInstruction,
+        temperature,
+      },
+    });
+    return response.text;
+  } catch (error) {
+    console.error(`Error generating document with model ${modelId}:`, error);
+    // Re-throw the original error to be handled by the calling function
+    throw error;
+  }
+};
+
+
+
 const DIALOGOS_SYSTEM_INSTRUCTION = `
-You are the Dialogos Agent, a component of the VeroBrix Sovereign Intelligence Engine.
-You operate from the perspective of Common Law, Natural Law, and Commercial Sovereignty.
-Your task is to analyze legal and commercial text (letters, contracts, notices) to identify "semantic traps"
-designed to ensnare a living man/woman into the jurisdiction of a corporate fiction (strawman).
-Identify terms like "resident", "person", "driver", "income", and "individual".
-Provide tactical rebuttals based on the distinction between the living soul and the legal entity.
-Be precise, firm, and grounded in law.
+You are the Dialogos Agent, an AI assistant designed for educational purposes.
+Your primary function is to analyze legal and commercial documents to identify key terms and compare their conventional meaning with alternative or "sovereign" interpretations. Your goal is to provide a balanced and responsible analysis to help users understand the potential risks associated with using non-standard legal arguments.
+
+For each significant term you identify (e.g., "person", "resident", "income"):
+1.  **Term**: State the term found in the document.
+2.  **Conventional Definition**: Briefly explain the standard, accepted legal or commercial meaning of the term.
+3.  **Alternative Interpretation**: Briefly explain the common "sovereign citizen" or alternative interpretation of the term.
+4.  **Risk Level**: Assign a risk level of "Low", "Medium", or "High" to the act of using the alternative interpretation in a real legal or financial context.
+    *   **Low**: The argument is unlikely to cause immediate legal issues but may be dismissed as irrelevant.
+    *   **Medium**: The argument is likely to be rejected by courts/agencies and could lead to procedural delays or minor penalties.
+    *   **High**: The argument is almost certain to be rejected and could lead to significant negative consequences, such as fines, sanctions, or the loss of legal rights.
+5.  **Rationale**: Explain *why* you assigned that risk level, referencing how courts and government bodies typically function.
+
+Finally, provide an overall summary of the document's purpose.
+
+Your output MUST be in a strict JSON format. You MUST include the following disclaimer in your overall summary:
+"***Disclaimer: This is an AI-generated analysis for educational purposes and is not legal advice. Alternative interpretations of law are often rejected by courts and can carry significant risks. Always consult a qualified attorney for advice on legal matters.***"
 `;
 
 const JARVIS_SYSTEM_INSTRUCTION = `
-You are JARVIS, a specialized Financial Instrument Processor.
-Your task is to extract highly specific data from financial documents (Bills, Statements, Notices) provided as Text, Images, or PDFs.
+You are JARVIS, a specialized Financial Document Data Extractor.
+Your task is to extract specific data points from financial documents like bills, statements, or notices.
 
-CRITICAL EXTRACTION RULES:
-1. **Creditor Name**: The legal entity issuing the bill.
-2. **Account Number**: The primary identifier for the account.
-3. **Amounts**: Distinguish between "Total Amount Due", "Past Due Amount", and "Coupon Amount".
-4. **Dates**: Distinguish between "Statement Date" (Billing Date) and "Due Date".
-5. **Addresses**: 
-   - "Payment/Remit Address": The specific address found on the detachable coupon where checks are mailed (PO Boxes are common).
-   - "Correspondence Address": The general corporate address.
-6. **Payment Coupon**: Determine if a detachable stub exists at the bottom.
+EXTRACTION RULES:
+1.  **Creditor Name**: The entity that issued the bill.
+2.  **Account Number**: The primary account identifier.
+3.  **Amounts**: Identify "Total Amount Due," "Past Due Amount," and any "Coupon Amount."
+4.  **Dates**: Identify the "Statement Date" (or Billing Date) and the "Due Date."
+5.  **Addresses**:
+    *   "Payment/Remit Address": The address for mailing payments, often found on a detachable coupon.
+    *   "Correspondence Address": The general corporate or contact address.
+6.  **Payment Coupon**: Note whether a detachable payment stub is present.
 
-Output strictly in JSON format.
+Your output must be in a strict JSON format. This tool is for organizing information and is not a legal analysis tool.
 `;
 
 const CREDIT_REPORT_INSTRUCTION = `
@@ -71,21 +129,25 @@ Extract this data strictly into JSON format.
 `;
 
 const REMEDY_SYSTEM_INSTRUCTION = `
-You are the RemedySynthesizer. You draft high-power legal documents, affidavits, and notices.
+You are the DraftMaster, an educational tool for generating document examples. You create drafts of letters, affidavits, and notices for informational purposes.
 
-LAWFUL ANCHORING PROTOCOL (MANDATORY):
-1. Definition: Begin key sections with authoritative definitions (Black's Law, Statute, UCC).
-2. Continuity: State clearly that the user's position preserves lawful continuity and is not a new invention.
-3. Ethos: Affirm that the user is not "frivolous" but exercising strict procedural rights.
+EDUCATIONAL DRAFTING PROTOCOL (MANDATORY):
+1.  **Contextual Definitions**: When using a legal term, provide a brief, conventional definition (e.g., from a standard legal dictionary).
+2.  **Clarity and Purpose**: Ensure the draft is clear, well-structured, and serves as a good example of a particular type of document.
+3.  **Include Disclaimer**: At the end of every generated document, you MUST include the following text:
+    "***Disclaimer: This is an AI-generated draft for educational purposes only. It is not legal advice. This document should be reviewed by a qualified attorney before any use.***"
 
-Tone: Authoritative, non-combatant, procedural, and grounded in the continuity of law.
-Format: Clean, professional legal document structure with proper headers and spacing.
+Tone: Clear, professional, and educational.
+Format: A clean, well-structured document that is easy to read and understand.
 `;
 
 const UCC_SYSTEM_INSTRUCTION = `
-You are the Commercial Registry Expert. You specialize in drafting UCC-1 Financing Statements under Article 9 of the Uniform Commercial Code.
-Your goal is to perfect a security interest where the Secured Party is the Living Man/Woman and the Debtor is the Corporate Legal Fiction (Strawman).
-You must carefully describe collateral to be "all assets, land, and personal property" to secure the maximum claim.
+You are the Commercial Law Educator. You specialize in generating *examples* of UCC-1 Financing Statement content for educational purposes, based on Article 9 of the Uniform Commercial Code.
+Your goal is to demonstrate how a security interest might be described.
+
+IMPORTANT: UCC filings are complex legal documents with significant consequences. Your output is a simplified example, not a ready-to-file document.
+You must add the following warning at the beginning of your output:
+"***WARNING: This is a simplified example for educational purposes ONLY. UCC filings are legally complex and have serious financial implications. Consult with a qualified attorney before attempting to file any UCC statement.***"
 `;
 
 const ID_SCANNER_INSTRUCTION = `
@@ -110,7 +172,7 @@ Output strictly JSON with 'title', 'description', 'steps' (array of label, text,
  * Performs a deep semantic scan using Gemini 3.0 Pro with Thinking Mode.
  */
 export const scanDocumentSemantics = async (documentText: string) => {
-  const modelId = 'gemini-3-pro-preview';
+  const modelId = MODEL_PRO;
   
   const config: GenerateContentConfig = {
     systemInstruction: DIALOGOS_SYSTEM_INSTRUCTION,
@@ -122,25 +184,29 @@ export const scanDocumentSemantics = async (documentText: string) => {
       type: Type.OBJECT,
       properties: {
         summary: { type: Type.STRING },
-        traps: { 
-          type: Type.ARRAY, 
-          items: { type: Type.STRING } 
-        },
-        jurisdiction_claimed: { type: Type.STRING },
-        rebuttal_strategy: { type: Type.STRING },
-        suggested_affidavit_points: {
+        riskAnalysis: {
           type: Type.ARRAY,
-          items: { type: Type.STRING } 
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              term: { type: Type.STRING },
+              conventionalDefinition: { type: Type.STRING },
+              alternativeInterpretation: { type: Type.STRING },
+              riskLevel: { type: Type.STRING, enum: ["Low", "Medium", "High"] },
+              rationale: { type: Type.STRING }
+            },
+            required: ["term", "conventionalDefinition", "alternativeInterpretation", "riskLevel", "rationale"]
+          }
         }
       },
-      required: ["summary", "traps", "jurisdiction_claimed", "rebuttal_strategy"]
+      required: ["summary", "riskAnalysis"]
     }
   };
 
   try {
     const response = await ai.models.generateContent({
       model: modelId,
-      contents: `Analyze the following text for jurisdictional traps and provide a Sovereign rebuttal strategy:\n\n${documentText}`,
+      contents: `Analyze the following text according to the system instruction:\n\n${documentText}`,
       config: config
     });
 
@@ -155,7 +221,7 @@ export const scanDocumentSemantics = async (documentText: string) => {
  * Performs a deep semantic scan on an uploaded document (PDF/Image).
  */
 export const scanDocumentSemanticsFromMedia = async (base64Data: string, mimeType: string) => {
-  const modelId = 'gemini-3-pro-preview';
+  const modelId = MODEL_PRO;
   
   const config: GenerateContentConfig = {
     systemInstruction: DIALOGOS_SYSTEM_INSTRUCTION,
@@ -167,18 +233,22 @@ export const scanDocumentSemanticsFromMedia = async (base64Data: string, mimeTyp
       type: Type.OBJECT,
       properties: {
         summary: { type: Type.STRING },
-        traps: { 
-          type: Type.ARRAY, 
-          items: { type: Type.STRING } 
-        },
-        jurisdiction_claimed: { type: Type.STRING },
-        rebuttal_strategy: { type: Type.STRING },
-        suggested_affidavit_points: {
+        riskAnalysis: {
           type: Type.ARRAY,
-          items: { type: Type.STRING } 
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              term: { type: Type.STRING },
+              conventionalDefinition: { type: Type.STRING },
+              alternativeInterpretation: { type: Type.STRING },
+              riskLevel: { type: Type.STRING, enum: ["Low", "Medium", "High"] },
+              rationale: { type: Type.STRING }
+            },
+            required: ["term", "conventionalDefinition", "alternativeInterpretation", "riskLevel", "rationale"]
+          }
         }
       },
-      required: ["summary", "traps", "jurisdiction_claimed", "rebuttal_strategy"]
+      required: ["summary", "riskAnalysis"]
     }
   };
 
@@ -188,7 +258,7 @@ export const scanDocumentSemanticsFromMedia = async (base64Data: string, mimeTyp
       contents: {
         parts: [
             { inlineData: { data: base64Data, mimeType: mimeType } },
-            { text: "Analyze the provided document for jurisdictional traps, servile language, and commercial presentments. Provide a Sovereign rebuttal strategy." }
+            { text: "Analyze the provided document according to the system instruction." }
         ]
       },
       config: config
@@ -206,7 +276,10 @@ export const scanDocumentSemanticsFromMedia = async (base64Data: string, mimeTyp
  * Uses Flash for speed and cost-efficiency.
  */
 export const parseInstrument = async (rawText: string): Promise<InstrumentData> => {
-  const modelId = 'gemini-2.5-flash';
+  if (!apiKey) {
+    throw new Error("API key is not configured. Please set GEMINI_API_KEY in your .env file.");
+  }
+  const modelId = MODEL_FLASH;
 
   const config: GenerateContentConfig = {
     systemInstruction: JARVIS_SYSTEM_INSTRUCTION,
@@ -252,7 +325,10 @@ export const parseInstrument = async (rawText: string): Promise<InstrumentData> 
  * Parses an instrument from an image OR PDF using Multimodal capabilities.
  */
 export const parseDocumentFromMedia = async (base64Data: string, mimeType: string): Promise<InstrumentData> => {
-  const modelId = 'gemini-2.5-flash';
+  if (!apiKey) {
+    throw new Error("API key is not configured. Please set GEMINI_API_KEY in your .env file.");
+  }
+  const modelId = MODEL_FLASH;
 
   const config: GenerateContentConfig = {
     systemInstruction: JARVIS_SYSTEM_INSTRUCTION,
@@ -306,7 +382,7 @@ export const parseDocumentFromMedia = async (base64Data: string, mimeType: strin
  * Analyzes a Credit Report (PDF/Image) for dispute candidates.
  */
 export const analyzeCreditReport = async (base64Data: string, mimeType: string) => {
-  const modelId = 'gemini-2.5-flash';
+  const modelId = MODEL_FLASH;
 
   const config: GenerateContentConfig = {
     systemInstruction: CREDIT_REPORT_INSTRUCTION,
@@ -337,7 +413,7 @@ export const analyzeCreditReport = async (base64Data: string, mimeType: string) 
  * Analyzes a Vehicle Financing Contract for TILA violations.
  */
 export const analyzeTILAContract = async (contractText: string): Promise<string> => {
-  const modelId = 'gemini-3-pro-preview'; // Use Pro for complex contract analysis
+  const modelId = MODEL_PRO; // Use Pro for complex contract analysis
 
   const jarvisSystemPrompt = `You are the JARVIS Agent, analyzing financial contracts for Truth in Lending Act (TILA) compliance. 
   Check specifically for:
@@ -379,7 +455,7 @@ export const analyzeTILAContract = async (contractText: string): Promise<string>
  * Parses an identity document (BC, DL, SS Card).
  */
 export const parseIdentityDocument = async (base64Data: string, mimeType: string) => {
-  const modelId = 'gemini-2.5-flash';
+  const modelId = MODEL_FLASH;
 
   const config: GenerateContentConfig = {
     systemInstruction: ID_SCANNER_INSTRUCTION,
@@ -424,8 +500,8 @@ export const parseIdentityDocument = async (base64Data: string, mimeType: string
 /**
  * Generates a status correction affidavit.
  */
-export const generateAffidavit = async (userData: any) => {
-  const modelId = 'gemini-2.5-flash';
+export const generateAffidavit = async (userData: GenerateAffidavitData) => {
+  const modelId = MODEL_FLASH;
   
   const prompt = `
     Generate a formal "Declaration of Status and Affidavit of Fact" formatted as a professional legal document.
@@ -438,7 +514,7 @@ export const generateAffidavit = async (userData: any) => {
     
     Structure:
     1. Title: "DECLARATION OF STATUS AND AFFIDAVIT OF FACT" centered and bold.
-    2. Venue: "State of ${userData.jurisdiction || '[State]'} } Scilicet"
+    2. Venue: "State of ${userData.jurisdiction || '[State]'} Scilicet"
     3. Body: Numbered paragraphs.
        - Anchor each paragraph with a definition or maxim (e.g. "Whereas, Black's Law defines 'Person' as...").
        - Assert lawful continuity (e.g. "This affidavit preserves the status quo ante...").
@@ -468,8 +544,8 @@ export const generateAffidavit = async (userData: any) => {
 /**
  * Generates an Accepted for Value (A4V) Tender Letter.
  */
-export const generateA4VLetter = async (data: any) => {
-  const modelId = 'gemini-2.5-flash';
+export const generateA4VLetter = async (data: GenerateA4VData) => {
+  const modelId = MODEL_FLASH;
 
   const prompt = `
     Generate a Formal Endorsement/Tender Letter for "Acceptance for Value".
@@ -507,9 +583,7 @@ export const generateA4VLetter = async (data: any) => {
 /**
  * Generates an FCRA Section 609 Dispute Letter.
  */
-export const generateFCRADispute = async (data: any) => {
-  const modelId = 'gemini-2.5-flash';
-
+export const generateFCRADispute = async (data: GenerateFCRADisputeData) => {
   const prompt = `
     Draft a formal FCRA Section 609 Dispute Letter for the Secured Party Creditor to be sent to a Credit Reporting Agency.
     
@@ -524,16 +598,7 @@ export const generateFCRADispute = async (data: any) => {
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: modelId,
-      contents: prompt,
-      config: {
-        systemInstruction: REMEDY_SYSTEM_INSTRUCTION,
-        temperature: 0.3
-      }
-    });
-
-    return response.text;
+    return await generateDocument(MODEL_FLASH, REMEDY_SYSTEM_INSTRUCTION, prompt);
   } catch (error) {
     console.error("FCRA Generator Error:", error);
     throw error;
@@ -543,9 +608,7 @@ export const generateFCRADispute = async (data: any) => {
 /**
  * Generates a Cease & Desist Letter based on FDCPA violations.
  */
-export const generateCeaseDesist = async (data: any, violations: any[]) => {
-  const modelId = 'gemini-2.5-flash';
-  
+export const generateCeaseDesist = async (data: GenerateCeaseDesistData, violations: FDCPAViolation[]) => {
   const violationText = violations.map((v, i) => `${i+1}. ${v.violationType}: ${v.details}`).join('\n');
 
   const prompt = `
@@ -564,16 +627,7 @@ export const generateCeaseDesist = async (data: any, violations: any[]) => {
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: modelId,
-      contents: prompt,
-      config: {
-        systemInstruction: REMEDY_SYSTEM_INSTRUCTION,
-        temperature: 0.3
-      }
-    });
-
-    return response.text;
+    return await generateDocument(MODEL_FLASH, REMEDY_SYSTEM_INSTRUCTION, prompt);
   } catch (error) {
     console.error("C&D Generator Error:", error);
     throw error;
@@ -583,23 +637,30 @@ export const generateCeaseDesist = async (data: any, violations: any[]) => {
 /**
  * Drafts a UCC-1 Financing Statement content.
  */
-export const draftUCC1Statement = async (data: any) => {
-  const modelId = 'gemini-3-pro-preview';
+export const draftUCC1Statement = async (data: DraftUCC1Data) => {
+  const modelId = MODEL_PRO;
 
   const prompt = `
-    Draft the content for a UCC-1 Financing Statement.
-    
-    Secured Party (Living Soul): ${data.securedParty}
-    Secured Party Address: ${data.securedPartyAddress}
-    Debtor (Legal Entity): ${data.debtorName}
-    Debtor Address: ${data.debtorAddress}
-    Collateral Description Input: ${data.collateralDescription || "All assets, land, and personal property..."}
-    
-    Task:
-    1. Create a text-based representation of a UCC-1 Financing Statement.
-    2. Box 4 (Collateral): Ensure the description is comprehensive based on the input. 
-       If the input is generic, expand upon it to include "all fixtures, timber to be cut, and as-extracted collateral" as per Article 9.
-    3. Format clearly with headers for "DEBTOR'S EXACT FULL LEGAL NAME", "SECURED PARTY''S NAME", and "COLLATERAL".
+    Your task is to generate an educational example of the text content for a UCC-1 Financing Statement.
+    The output must satisfy the core requirements of UCC § 9-502, which are:
+    1. The name of the debtor.
+    2. The name of the secured party.
+    3. An indication of the collateral.
+
+    Using the data below, create a clean, text-based representation of a financing statement's essential fields.
+
+    ---
+    DATA:
+    - Secured Party Name: ${data.securedParty}
+    - Secured Party Address: ${data.securedPartyAddress}
+    - Debtor's Exact Full Legal Name: ${data.debtorName}
+    - Debtor's Mailing Address: ${data.debtorAddress}
+    - Collateral Indication: ${data.collateralDescription || "All assets, property, and interests of the Debtor, whether now owned or hereafter acquired."}
+    ---
+
+    TASK:
+    1.  Format the output clearly with headers for "DEBTOR'S EXACT FULL LEGAL NAME", "SECURED PARTY'S NAME", and "COLLATERAL".
+    2.  For the "COLLATERAL" section, use the provided "Collateral Indication". If it is generic, expand upon it to demonstrate a comprehensive description, including terms like "all fixtures, accounts, inventory, equipment, and as-extracted collateral" to illustrate a broad filing under UCC Article 9.
   `;
 
   try {
@@ -625,9 +686,7 @@ export const draftUCC1Statement = async (data: any) => {
  * Generates an Endorsement Allonge (Attachment).
  * Now supports Notary Blocks and Digital Signatures.
  */
-export const generateAllonge = async (data: any) => {
-  const modelId = 'gemini-2.5-flash';
-
+export const generateAllonge = async (data: GenerateAllongeData) => {
   const prompt = `
     Draft a formal "Allonge" (Attachment to Instrument).
     
@@ -652,16 +711,7 @@ export const generateAllonge = async (data: any) => {
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: modelId,
-      contents: prompt,
-      config: {
-        systemInstruction: REMEDY_SYSTEM_INSTRUCTION,
-        temperature: 0.3
-      }
-    });
-
-    return response.text;
+    return await generateDocument(MODEL_FLASH, REMEDY_SYSTEM_INSTRUCTION, prompt);
   } catch (error) {
     console.error("Allonge Generator Error:", error);
     throw error;
@@ -672,7 +722,7 @@ export const generateAllonge = async (data: any) => {
  * Generates a custom document from a user template.
  */
 export const generateCustomDocument = async (systemPrompt: string, userPrompt: string) => {
-  const modelId = 'gemini-2.5-flash';
+  const modelId = MODEL_FLASH;
   
   try {
     const response = await ai.models.generateContent({
@@ -694,7 +744,7 @@ export const generateCustomDocument = async (systemPrompt: string, userPrompt: s
  * Generates a tactical call script.
  */
 export const generateCallScript = async (scenario: string): Promise<CallScript> => {
-  const modelId = 'gemini-2.5-flash';
+  const modelId = MODEL_FLASH;
 
   try {
     const response = await ai.models.generateContent({
@@ -716,25 +766,38 @@ export const generateCallScript = async (scenario: string): Promise<CallScript> 
 /**
  * Generates a Private Trust Indenture.
  */
-export const generateTrustIndenture = async (data: any) => {
-  const modelId = 'gemini-3-pro-preview';
+export const generateTrustIndenture = async (data: GenerateTrustIndentureData) => {
+  const modelId = MODEL_PRO;
   
   const prompt = `
-    Draft a comprehensive Declaration of Trust for a Private Express Trust (Common Law, 98-Series).
+    Draft a comprehensive Declaration of Trust for a Private Express Trust, operating under Common Law.
     
-    Trust Name: ${data.trustName}
-    Grantor/Settlor: ${data.grantor}
-    Trustee: ${data.trustee}
-    Beneficiary: ${data.beneficiary}
-    Situs (Jurisdiction): ${data.situs}
-    Date: ${data.dateCreated}
+    DATA:
+    - Trust Name: ${data.trustName}
+    - Grantor/Settlor: ${data.grantor}
+    - Trustee(s): ${data.trustee}
+    - Beneficiary/Beneficiaries: ${data.beneficiary}
+    - Situs (Jurisdiction): ${data.situs}
+    - Date of Creation: ${data.dateCreated}
     
-    The document must include:
-    1. Declaration that this is an Irrevocable Private Ecclesiastical/Express Trust.
-    2. Disclaimer that it is not a statutory entity.
-    3. Powers of the Trustee (Full discretionary power).
-    4. Spendthrift Clause (Protection of Beneficiary assets).
-    5. Schedule A (Placeholder for assets).
+    TASK:
+    Generate the full text of the trust indenture. The document must be well-structured with numbered articles and must include the following essential elements:
+
+    1.  **Article I: Declaration of Trust:** State the Grantor's intent to create an irrevocable express trust and identify the initial trust property (res), referencing a "Schedule A".
+    2.  **Article II: Trust Name and Nature:** Specify the name of the trust and declare that it is a private entity, not statutory, and operates under the common law of the specified Situs.
+    3.  **Article III: Trustee Appointment and Powers:**
+        -   Formally appoint the Trustee.
+        -   Grant the Trustee full discretionary power to manage the trust assets in the best interest of the Beneficiary.
+        -   List key powers (e.g., to buy, sell, lease, invest).
+    4.  **Article IV: Trustee Duties:** Outline the fundamental duties of the Trustee, including the Duty of Loyalty (to act solely for the Beneficiary's benefit) and the Duty of Care (to act as a prudent person would).
+    5.  **Article V: Beneficiaries:** Clearly identify the Beneficiary/Beneficiaries.
+    6.  **Article VI: Distributions:** Include a clause describing how and when the Trustee may make distributions of income or principal to the Beneficiary. (e.g., "The Trustee shall distribute such amounts of income and principal as the Trustee, in their sole discretion, deems necessary for the health, education, maintenance, and support of the Beneficiary.")
+    7.  **Article VII: Spendthrift Provision:** Include a strong spendthrift clause to protect the trust assets from the creditors of the Beneficiary.
+    8.  **Article VIII: Governing Law:** State that the laws of the specified Situs (e.g., "${data.situs}") will govern the trust.
+    9.  **Article IX: Amendment and Termination:** Declare the trust to be irrevocable and specify the conditions under which it may terminate (e.g., upon the death of the final beneficiary and distribution of all assets).
+    10. **Article X: Severability:** Add a standard severability clause, stating that if any provision is deemed unenforceable, the remaining provisions will stay in effect.
+    11. **Execution and Notarization:** End with signature blocks for the Grantor and the Trustee(s) and a standard notary jurat block.
+    12. **Schedule A:** Append a placeholder for "Schedule A - Trust Property".
   `;
 
   try {
@@ -757,9 +820,7 @@ export const generateTrustIndenture = async (data: any) => {
  * Generates an Assignment of Title (Funding Document).
  * Optionally attaches a Copyright Notice as an exhibit.
  */
-export const generateAssetAssignment = async (data: any) => {
-  const modelId = 'gemini-2.5-flash';
-  
+export const generateAssetAssignment = async (data: GenerateAssetAssignmentData) => {
   let exhibitLogic = "";
   if (data.includeCopyright) {
     exhibitLogic = `
@@ -795,14 +856,7 @@ export const generateAssetAssignment = async (data: any) => {
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: modelId,
-      contents: prompt,
-      config: {
-        systemInstruction: REMEDY_SYSTEM_INSTRUCTION
-      }
-    });
-    return response.text;
+    return await generateDocument(MODEL_FLASH, REMEDY_SYSTEM_INSTRUCTION, prompt, 0.3);
   } catch (error) {
     console.error("Asset Assignment Error:", error);
     throw error;
@@ -812,9 +866,7 @@ export const generateAssetAssignment = async (data: any) => {
 /**
  * Generates a Common Law Copyright Notice for the Name.
  */
-export const generateCopyrightNotice = async (data: any) => {
-  const modelId = 'gemini-2.5-flash';
-  
+export const generateCopyrightNotice = async (data: GenerateCopyrightNoticeData) => {
   const prompt = `
     Draft a "Common Law Copyright Notice and Hold Harmless Agreement".
     
@@ -831,14 +883,7 @@ export const generateCopyrightNotice = async (data: any) => {
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: modelId,
-      contents: prompt,
-      config: {
-        systemInstruction: REMEDY_SYSTEM_INSTRUCTION
-      }
-    });
-    return response.text;
+    return await generateDocument(MODEL_FLASH, REMEDY_SYSTEM_INSTRUCTION, prompt, 0.3);
   } catch (error) {
     console.error("Copyright Gen Error:", error);
     throw error;
@@ -848,9 +893,7 @@ export const generateCopyrightNotice = async (data: any) => {
 /**
  * Generates a Restrictive Endorsement for Checks.
  */
-export const generateRestrictiveEndorsement = async (accordData: any) => {
-  const modelId = 'gemini-2.5-flash';
-  
+export const generateRestrictiveEndorsement = async (accordData: GenerateRestrictiveEndorsementData) => {
   const prompt = `
     Generate the text for a Restrictive Endorsement to be printed on the back of a check or money order.
     
@@ -864,14 +907,7 @@ export const generateRestrictiveEndorsement = async (accordData: any) => {
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: modelId,
-      contents: prompt,
-      config: {
-        systemInstruction: REMEDY_SYSTEM_INSTRUCTION
-      }
-    });
-    return response.text;
+    return await generateDocument(MODEL_FLASH, REMEDY_SYSTEM_INSTRUCTION, prompt, 0.3);
   } catch (error) {
     console.error("Endorsement Gen Error:", error);
     throw error;
@@ -881,9 +917,7 @@ export const generateRestrictiveEndorsement = async (accordData: any) => {
 /**
  * Generates an Accord and Satisfaction Cover Letter.
  */
-export const generateAccordLetter = async (accordData: any) => {
-  const modelId = 'gemini-2.5-flash';
-
+export const generateAccordLetter = async (accordData: GenerateAccordLetterData) => {
   const prompt = `
     Draft a cover letter establishing an Accord and Satisfaction under UCC 3-311.
     
@@ -899,14 +933,7 @@ export const generateAccordLetter = async (accordData: any) => {
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: modelId,
-      contents: prompt,
-      config: {
-        systemInstruction: REMEDY_SYSTEM_INSTRUCTION
-      }
-    });
-    return response.text;
+    return await generateDocument(MODEL_FLASH, REMEDY_SYSTEM_INSTRUCTION, prompt, 0.3);
   } catch (error) {
     console.error("Accord Letter Error:", error);
     throw error;
@@ -916,8 +943,8 @@ export const generateAccordLetter = async (accordData: any) => {
 /**
  * Generates an International Promissory Note (Sovereign Banking).
  */
-export const generateSovereignNote = async (data: any) => {
-  const modelId = 'gemini-3-pro-preview';
+export const generateSovereignNote = async (data: GenerateSovereignNoteData) => {
+  const modelId = MODEL_PRO;
 
   const prompt = `
     Draft a high-security "International Promissory Note" based on the UNCITRAL Convention on International Bills of Exchange and International Promissory Notes.
@@ -957,9 +984,7 @@ export const generateSovereignNote = async (data: any) => {
  * Generates Admin Remedy Notices (Feature #3).
  * Step 1: Inquiry, Step 2: Fault, Step 3: Default.
  */
-export const generateAdminNotice = async (step: 'Step 1: Inquiry' | 'Step 2: Fault' | 'Step 3: Default', data: any) => {
-  const modelId = 'gemini-2.5-flash';
-  
+export const generateAdminNotice = async (step: 'Step 1: Inquiry' | 'Step 2: Fault' | 'Step 3: Default', data: GenerateAdminNoticeData) => {
   let stepPrompt = "";
   if (step === 'Step 1: Inquiry') {
     stepPrompt = `Draft a "Notice of Conditional Acceptance and Request for Proof of Claim".
@@ -990,15 +1015,7 @@ export const generateAdminNotice = async (step: 'Step 1: Inquiry' | 'Step 2: Fau
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: modelId,
-      contents: prompt,
-      config: {
-        systemInstruction: REMEDY_SYSTEM_INSTRUCTION,
-        temperature: 0.3
-      }
-    });
-    return response.text;
+    return await generateDocument(MODEL_FLASH, REMEDY_SYSTEM_INSTRUCTION, prompt);
   } catch (error) {
     console.error("Admin Notice Error:", error);
     throw error;
@@ -1008,9 +1025,7 @@ export const generateAdminNotice = async (step: 'Step 1: Inquiry' | 'Step 2: Fau
 /**
  * Generates a Commercial Invoice (Feature #1).
  */
-export const generateInvoice = async (data: any) => {
-  const modelId = 'gemini-2.5-flash';
-  
+export const generateInvoice = async (data: GenerateInvoiceData) => {
   const prompt = `
     Draft a "Commercial Invoice" / "True Bill".
     
@@ -1028,15 +1043,7 @@ export const generateInvoice = async (data: any) => {
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: modelId,
-      contents: prompt,
-      config: {
-        systemInstruction: REMEDY_SYSTEM_INSTRUCTION, // Reusing Remedy instruction for authoritative tone
-        temperature: 0.3
-      }
-    });
-    return response.text;
+    return await generateDocument(MODEL_FLASH, REMEDY_SYSTEM_INSTRUCTION, prompt);
   } catch (error) {
     console.error("Invoice Gen Error:", error);
     throw error;
@@ -1046,9 +1053,7 @@ export const generateInvoice = async (data: any) => {
 /**
  * Generates a Rescission of Signature Notice (Feature #2).
  */
-export const generateRescissionNotice = async (data: any) => {
-  const modelId = 'gemini-2.5-flash';
-  
+export const generateRescissionNotice = async (data: GenerateRescissionNoticeData) => {
   const prompt = `
     Draft a formal "Notice of Rescission of Signature and Revocation of Power of Attorney".
     
@@ -1064,15 +1069,7 @@ export const generateRescissionNotice = async (data: any) => {
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: modelId,
-      contents: prompt,
-      config: {
-        systemInstruction: REMEDY_SYSTEM_INSTRUCTION,
-        temperature: 0.3
-      }
-    });
-    return response.text;
+    return await generateDocument(MODEL_FLASH, REMEDY_SYSTEM_INSTRUCTION, prompt);
   } catch (error) {
     console.error("Rescission Gen Error:", error);
     throw error;
